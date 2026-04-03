@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git submodule:*)",
+      "WebSearch",
+      "Bash(git -C /Users/patrick/workspace/variableway/innate/capture submodule status)",
+      "Bash(go mod:*)",
+      "Bash(go get:*)",
+      "Bash(go build:*)",
+      "Bash(go run:*)",
+      "Bash(go list:*)",
+      "Bash(go test:*)",
+      "Bash(./capture --help)"
+    ]
+  }
+}
