@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/variableway/innate/capture/internal/model"
@@ -29,9 +29,9 @@ type column struct {
 
 // App is the root bubbletea Model for the TUI application.
 type App struct {
-	taskSvc  *service.TaskService
-	columns  []column
-	cursor   struct {
+	taskSvc *service.TaskService
+	columns []column
+	cursor  struct {
 		col int
 		row int
 	}
@@ -197,6 +197,7 @@ func (a *App) renderCard(task *model.Task, selected bool) string {
 
 	var parts []string
 	parts = append(parts, fmt.Sprintf("%s %s", task.ID, task.Title))
+	parts = append(parts, fmt.Sprintf("stage: %s", task.Stage))
 
 	priorityStr := string(task.Priority)
 	switch task.Priority {
@@ -216,6 +217,9 @@ func (a *App) renderCard(task *model.Task, selected bool) string {
 		}
 		parts = append(parts, strings.Join(tagStrs, " "))
 	}
+	if task.Dispatch.Agent != "" {
+		parts = append(parts, fmt.Sprintf("agent: %s", task.Dispatch.Agent))
+	}
 
 	return style.Render(strings.Join(parts, "\n"))
 }
@@ -231,10 +235,17 @@ func (a *App) viewDetail() string {
 	sb.WriteString(detailTitleStyle.Render(fmt.Sprintf("Task %s", t.ID)))
 	sb.WriteString(fmt.Sprintf("\n\nTitle:    %s", t.Title))
 	sb.WriteString(fmt.Sprintf("\nStatus:   %s", t.Status))
+	sb.WriteString(fmt.Sprintf("\nStage:    %s", t.Stage))
 	sb.WriteString(fmt.Sprintf("\nPriority: %s", t.Priority))
 	sb.WriteString(fmt.Sprintf("\nSource:   %s", t.Source))
 	sb.WriteString(fmt.Sprintf("\nCreated:  %s", t.CreatedAt.Format("2006-01-02 15:04:05")))
 	sb.WriteString(fmt.Sprintf("\nUpdated:  %s", t.UpdatedAt.Format("2006-01-02 15:04:05")))
+	if t.Dispatch.Agent != "" {
+		sb.WriteString(fmt.Sprintf("\nAgent:    %s", t.Dispatch.Agent))
+	}
+	if t.Dispatch.Repository != "" {
+		sb.WriteString(fmt.Sprintf("\nRepo:     %s", t.Dispatch.Repository))
+	}
 
 	if len(t.Tags) > 0 {
 		sb.WriteString(fmt.Sprintf("\nTags:     %s", strings.Join(t.Tags, ", ")))

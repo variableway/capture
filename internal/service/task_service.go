@@ -107,6 +107,10 @@ func WithPriority(p model.TaskPriority) TaskOption {
 	return func(t *model.Task) { t.Priority = p }
 }
 
+func WithStage(stage model.TaskStage) TaskOption {
+	return func(t *model.Task) { t.Stage = stage }
+}
+
 func WithTags(tags []string) TaskOption {
 	return func(t *model.Task) { t.Tags = tags }
 }
@@ -117,4 +121,8 @@ func WithSource(source string) TaskOption {
 
 func WithContext(ctx model.TaskContext) TaskOption {
 	return func(t *model.Task) { t.Context = ctx }
+}
+
+func WithDispatch(dispatch model.TaskDispatch) TaskOption {
+	return func(t *model.Task) { t.Dispatch = dispatch }
 }

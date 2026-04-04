@@ -6,8 +6,8 @@ import (
 
 func TestIsValidStatus(t *testing.T) {
 	tests := []struct {
-		status  string
-		want    bool
+		status string
+		want   bool
 	}{
 		{"todo", true},
 		{"in_progress", true},
@@ -48,12 +48,39 @@ func TestIsValidPriority(t *testing.T) {
 	}
 }
 
+func TestIsValidStage(t *testing.T) {
+	tests := []struct {
+		stage string
+		want  bool
+	}{
+		{"inbox", true},
+		{"mindstorm", true},
+		{"analysis", true},
+		{"planning", true},
+		{"prd", true},
+		{"tasks", true},
+		{"dispatch", true},
+		{"execution", true},
+		{"review", true},
+		{"unknown", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.stage, func(t *testing.T) {
+			if got := IsValidStage(tt.stage); got != tt.want {
+				t.Errorf("IsValidStage(%q) = %v, want %v", tt.stage, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCanTransition(t *testing.T) {
 	tests := []struct {
-		name    string
-		from    TaskStatus
-		to      TaskStatus
-		want    bool
+		name string
+		from TaskStatus
+		to   TaskStatus
+		want bool
 	}{
 		{"todo to in_progress", StatusTodo, StatusInProgress, true},
 		{"todo to done", StatusTodo, StatusDone, true},
@@ -82,6 +109,9 @@ func TestNewTask(t *testing.T) {
 	}
 	if task.Status != StatusTodo {
 		t.Errorf("NewTask status = %q, want %q", task.Status, StatusTodo)
+	}
+	if task.Stage != StageInbox {
+		t.Errorf("NewTask stage = %q, want %q", task.Stage, StageInbox)
 	}
 	if task.Priority != PriorityMedium {
 		t.Errorf("NewTask priority = %q, want %q", task.Priority, PriorityMedium)

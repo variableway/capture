@@ -13,16 +13,23 @@ import (
 func TestMarkdownStore_CreateAndGet(t *testing.T) {
 	dir := t.TempDir()
 	s := NewMarkdownStore(dir)
+	assignedAt := time.Now()
 
 	task := &model.Task{
 		ID:        "TASK-00001",
 		Title:     "Test task",
 		Status:    model.StatusTodo,
+		Stage:     model.StageAnalysis,
 		Priority:  model.PriorityHigh,
 		Tags:      []string{"test"},
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		Source:    "cli",
+		Dispatch: model.TaskDispatch{
+			Agent:      "codex",
+			Repository: "/tmp/repo",
+			AssignedAt: &assignedAt,
+		},
 	}
 
 	ctx := context.Background()
@@ -46,6 +53,12 @@ func TestMarkdownStore_CreateAndGet(t *testing.T) {
 	}
 	if got.Title != task.Title {
 		t.Errorf("Title = %q, want %q", got.Title, task.Title)
+	}
+	if got.Stage != task.Stage {
+		t.Errorf("Stage = %q, want %q", got.Stage, task.Stage)
+	}
+	if got.Dispatch.Agent != task.Dispatch.Agent {
+		t.Errorf("Dispatch.Agent = %q, want %q", got.Dispatch.Agent, task.Dispatch.Agent)
 	}
 }
 
@@ -119,6 +132,7 @@ func TestMarkdownStore_List(t *testing.T) {
 			ID:        fmt.Sprintf("TASK-0000%d", i+1),
 			Title:     title,
 			Status:    model.StatusTodo,
+			Stage:     model.StageInbox,
 			Priority:  model.PriorityMedium,
 			Tags:      []string{},
 			CreatedAt: time.Now(),
@@ -135,5 +149,37 @@ func TestMarkdownStore_List(t *testing.T) {
 
 	if len(tasks) != 3 {
 		t.Errorf("ListTasks returned %d tasks, want 3", len(tasks))
+	}
+}
+
+func TestMarkdownStore_ListWithStageFilter(t *testing.T) {
+	dir := t.TempDir()
+	s := NewMarkdownStore(dir)
+
+	ctx := context.Background()
+	for i, stage := range []model.TaskStage{model.StageInbox, model.StageAnalysis, model.StageAnalysis} {
+		task := &model.Task{
+			ID:        fmt.Sprintf("TASK-1000%d", i+1),
+			Title:     fmt.Sprintf("Task %d", i+1),
+			Status:    model.StatusTodo,
+			Stage:     stage,
+			Priority:  model.PriorityMedium,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+			Source:    "cli",
+		}
+		if err := s.CreateTask(ctx, task); err != nil {
+			t.Fatalf("CreateTask failed: %v", err)
+		}
+	}
+
+	stage := model.StageAnalysis
+	tasks, err := s.ListTasks(ctx, model.TaskFilter{Stage: &stage})
+	if err != nil {
+		t.Fatalf("ListTasks failed: %v", err)
+	}
+
+	if len(tasks) != 2 {
+		t.Errorf("ListTasks with stage filter returned %d tasks, want 2", len(tasks))
 	}
 }

@@ -11,10 +11,11 @@ import (
 )
 
 var (
-	editTitle       string
-	editDesc        string
-	editTags        string
-	editPriority    string
+	editTitle    string
+	editDesc     string
+	editTags     string
+	editPriority string
+	editStage    string
 )
 
 var editCmd = &cobra.Command{
@@ -45,6 +46,12 @@ var editCmd = &cobra.Command{
 			}
 			opts = append(opts, service.WithPriority(model.TaskPriority(editPriority)))
 		}
+		if editStage != "" {
+			if !model.IsValidStage(editStage) {
+				return fmt.Errorf("invalid stage: %s", editStage)
+			}
+			opts = append(opts, service.WithStage(model.TaskStage(editStage)))
+		}
 		if editTags != "" {
 			tags := strings.Split(editTags, ",")
 			for i, t := range tags {
@@ -68,5 +75,6 @@ func init() {
 	editCmd.Flags().StringVarP(&editDesc, "description", "d", "", "New description")
 	editCmd.Flags().StringVarP(&editTags, "tags", "t", "", "New tags (comma-separated)")
 	editCmd.Flags().StringVarP(&editPriority, "priority", "p", "", "New priority (high, medium, low)")
+	editCmd.Flags().StringVar(&editStage, "stage", "", "New stage (inbox, mindstorm, analysis, planning, prd, tasks, dispatch, execution, review)")
 	rootCmd.AddCommand(editCmd)
 }

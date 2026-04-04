@@ -49,14 +49,19 @@ func (s *SQLiteStore) migrate() error {
 		id TEXT PRIMARY KEY,
 		title TEXT NOT NULL,
 		status TEXT NOT NULL DEFAULT 'todo',
+		stage TEXT NOT NULL DEFAULT 'inbox',
 		priority TEXT DEFAULT 'medium',
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL,
 		source TEXT DEFAULT 'cli',
 		file_path TEXT NOT NULL,
-		feishu_record_id TEXT DEFAULT ''
+		feishu_record_id TEXT DEFAULT '',
+		assigned_agent TEXT DEFAULT '',
+		assigned_repository TEXT DEFAULT '',
+		assigned_at DATETIME
 	);
 	CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+	CREATE INDEX IF NOT EXISTS idx_tasks_stage ON tasks(stage);
 	CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
 	CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
 
@@ -83,8 +88,22 @@ func (s *SQLiteStore) migrate() error {
 		error_message TEXT
 	);
 	`
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+
+	for _, stmt := range []string{
+		`ALTER TABLE tasks ADD COLUMN stage TEXT NOT NULL DEFAULT 'inbox'`,
+		`ALTER TABLE tasks ADD COLUMN assigned_agent TEXT DEFAULT ''`,
+		`ALTER TABLE tasks ADD COLUMN assigned_repository TEXT DEFAULT ''`,
+		`ALTER TABLE tasks ADD COLUMN assigned_at DATETIME`,
+	} {
+		if _, err := s.db.Exec(stmt); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *SQLiteStore) CreateTask(ctx context.Context, task *model.Task) error {
@@ -95,12 +114,13 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *model.Task) error {
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO tasks (id, title, status, priority, created_at, updated_at, source, file_path, feishu_record_id)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		task.ID, task.Title, string(task.Status), string(task.Priority),
+		`INSERT INTO tasks (id, title, status, stage, priority, created_at, updated_at, source, file_path, feishu_record_id, assigned_agent, assigned_repository, assigned_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		task.ID, task.Title, string(task.Status), string(task.Stage), string(task.Priority),
 		task.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		task.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		task.Source, task.FilePath, task.Sync.FeishuRecordID,
+		task.Dispatch.Agent, task.Dispatch.Repository, formatNullableTime(task.Dispatch.AssignedAt),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert task: %w", err)
@@ -119,13 +139,15 @@ func (s *SQLiteStore) CreateTask(ctx context.Context, task *model.Task) error {
 
 func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*model.Task, error) {
 	var task model.Task
-	var status, priority, source, filePath, feishuRecordID string
+	var status, stage, priority, source, filePath, feishuRecordID string
+	var assignedAgent, assignedRepository string
 	var createdAt, updatedAt string
+	var assignedAt sql.NullString
 
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, title, status, priority, created_at, updated_at, source, file_path, feishu_record_id
+		`SELECT id, title, status, stage, priority, created_at, updated_at, source, file_path, feishu_record_id, assigned_agent, assigned_repository, assigned_at
 		 FROM tasks WHERE id = ?`, id,
-	).Scan(&task.ID, &task.Title, &status, &priority, &createdAt, &updatedAt, &source, &filePath, &feishuRecordID)
+	).Scan(&task.ID, &task.Title, &status, &stage, &priority, &createdAt, &updatedAt, &source, &filePath, &feishuRecordID, &assignedAgent, &assignedRepository, &assignedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("task %s not found", id)
@@ -135,14 +157,22 @@ func (s *SQLiteStore) GetTask(ctx context.Context, id string) (*model.Task, erro
 	}
 
 	task.Status = model.TaskStatus(status)
+	task.Stage = model.TaskStage(stage)
 	task.Priority = model.TaskPriority(priority)
 	task.Source = source
 	task.FilePath = filePath
 	task.Sync.FeishuRecordID = feishuRecordID
+	task.Dispatch.Agent = assignedAgent
+	task.Dispatch.Repository = assignedRepository
 
 	// Parse timestamps
 	task.CreatedAt, _ = parseTime(createdAt)
 	task.UpdatedAt, _ = parseTime(updatedAt)
+	if assignedAt.Valid && strings.TrimSpace(assignedAt.String) != "" {
+		if parsed, err := parseTime(assignedAt.String); err == nil {
+			task.Dispatch.AssignedAt = &parsed
+		}
+	}
 
 	// Load tags
 	tags, err := s.getTags(ctx, id)
@@ -161,10 +191,10 @@ func (s *SQLiteStore) UpdateTask(ctx context.Context, task *model.Task) error {
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx,
-		`UPDATE tasks SET title=?, status=?, priority=?, updated_at=?, file_path=?, feishu_record_id=? WHERE id=?`,
-		task.Title, string(task.Status), string(task.Priority),
+		`UPDATE tasks SET title=?, status=?, stage=?, priority=?, updated_at=?, file_path=?, feishu_record_id=?, assigned_agent=?, assigned_repository=?, assigned_at=? WHERE id=?`,
+		task.Title, string(task.Status), string(task.Stage), string(task.Priority),
 		task.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		task.FilePath, task.Sync.FeishuRecordID, task.ID,
+		task.FilePath, task.Sync.FeishuRecordID, task.Dispatch.Agent, task.Dispatch.Repository, formatNullableTime(task.Dispatch.AssignedAt), task.ID,
 	)
 	if err != nil {
 		return err
@@ -190,13 +220,17 @@ func (s *SQLiteStore) DeleteTask(ctx context.Context, id string) error {
 }
 
 func (s *SQLiteStore) ListTasks(ctx context.Context, filter model.TaskFilter) ([]*model.Task, error) {
-	query := `SELECT id, title, status, priority, created_at, updated_at, source, file_path, feishu_record_id FROM tasks`
+	query := `SELECT id, title, status, stage, priority, created_at, updated_at, source, file_path, feishu_record_id, assigned_agent, assigned_repository, assigned_at FROM tasks`
 	var conditions []string
 	var args []interface{}
 
 	if filter.Status != nil {
 		conditions = append(conditions, "status = ?")
 		args = append(args, string(*filter.Status))
+	}
+	if filter.Stage != nil {
+		conditions = append(conditions, "stage = ?")
+		args = append(args, string(*filter.Stage))
 	}
 	if filter.Priority != nil {
 		conditions = append(conditions, "priority = ?")
@@ -231,20 +265,30 @@ func (s *SQLiteStore) ListTasks(ctx context.Context, filter model.TaskFilter) ([
 	var tasks []*model.Task
 	for rows.Next() {
 		var task model.Task
-		var status, priority, source, filePath, feishuRecordID string
+		var status, stage, priority, source, filePath, feishuRecordID string
+		var assignedAgent, assignedRepository string
 		var createdAt, updatedAt string
+		var assignedAt sql.NullString
 
-		if err := rows.Scan(&task.ID, &task.Title, &status, &priority, &createdAt, &updatedAt, &source, &filePath, &feishuRecordID); err != nil {
+		if err := rows.Scan(&task.ID, &task.Title, &status, &stage, &priority, &createdAt, &updatedAt, &source, &filePath, &feishuRecordID, &assignedAgent, &assignedRepository, &assignedAt); err != nil {
 			continue
 		}
 
 		task.Status = model.TaskStatus(status)
+		task.Stage = model.TaskStage(stage)
 		task.Priority = model.TaskPriority(priority)
 		task.Source = source
 		task.FilePath = filePath
 		task.Sync.FeishuRecordID = feishuRecordID
+		task.Dispatch.Agent = assignedAgent
+		task.Dispatch.Repository = assignedRepository
 		task.CreatedAt, _ = parseTime(createdAt)
 		task.UpdatedAt, _ = parseTime(updatedAt)
+		if assignedAt.Valid && strings.TrimSpace(assignedAt.String) != "" {
+			if parsed, err := parseTime(assignedAt.String); err == nil {
+				task.Dispatch.AssignedAt = &parsed
+			}
+		}
 
 		tags, _ := s.getTags(ctx, task.ID)
 		task.Tags = tags
@@ -287,4 +331,11 @@ func parseTime(s string) (time.Time, error) {
 		}
 	}
 	return time.Time{}, fmt.Errorf("cannot parse time: %s", s)
+}
+
+func formatNullableTime(t *time.Time) interface{} {
+	if t == nil {
+		return nil
+	}
+	return t.Format("2006-01-02T15:04:05Z07:00")
 }

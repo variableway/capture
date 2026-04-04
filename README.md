@@ -5,10 +5,12 @@
 ## 功能特性
 
 - **CLI 命令行** — 快速创建、查看、编辑、删除任务
+- **Task Center 工作流** — 支持从 inbox、mindstorm、analysis 到 dispatch、execution、review 的阶段化流转
 - **TUI 看板** — 终端交互式看板界面，可视化任务状态
 - **飞书 Bot** — 通过飞书机器人接收消息，自动创建任务
 - **飞书多维表格同步** — 双向同步任务到飞书 Bitable
 - **Markdown 存储** — 任务以 Markdown + YAML frontmatter 格式存储
+- **Agent 分派记录** — 为任务记录 agent、model、repo、worktree、terminal 等执行上下文
 - **双模式 Bot** — 支持 Webhook 和 WebSocket 两种连接模式
 
 ## 安装
@@ -32,20 +34,30 @@ capture init
 # 创建任务
 capture add "优化项目构建脚本"
 capture add "学习 Go 语言" -d "完成官方教程" -t "学习,Go" -p high
+capture add "设计本地任务中心" --stage analysis
 
 # 查看任务列表
 capture list
 capture list --status todo
+capture list --stage analysis
 
 # 查看任务详情
 capture show TASK-00001
 
 # 更新任务
 capture edit TASK-00001 --title "新的标题" --priority high
+capture edit TASK-00001 --stage planning
 
 # 修改状态
 capture status TASK-00001 in_progress
 capture status TASK-00001 done
+
+# 修改任务阶段
+capture stage TASK-00001 mindstorm
+capture stage TASK-00001 dispatch
+
+# 分配给 AI Agent
+capture assign TASK-00001 --agent codex --model gpt-5 --repo ~/workspace/project --worktree ~/workspace/project --terminal term-1
 
 # 删除任务
 capture delete TASK-00001
@@ -171,11 +183,19 @@ bot:
 id: TASK-00001
 title: "优化项目构建脚本"
 status: todo
+stage: analysis
 priority: high
 tags: [优化, 构建]
 created_at: 2026-04-03T10:30:00+08:00
 updated_at: 2026-04-03T10:30:00+08:00
 source: cli
+dispatch:
+  agent: "codex"
+  model: "gpt-5"
+  repository: "/Users/demo/workspace/project"
+  worktree: "/Users/demo/workspace/project"
+  terminal_session: "term-1"
+  assigned_at: 2026-04-03T11:00:00+08:00
 sync:
   feishu_record_id: ""
   last_synced_at: null

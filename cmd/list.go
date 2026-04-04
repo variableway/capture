@@ -10,7 +10,10 @@ import (
 	"github.com/variableway/innate/capture/internal/store"
 )
 
-var listStatus string
+var (
+	listStatus string
+	listStage  string
+)
 
 var listCmd = &cobra.Command{
 	Use:   "list",
@@ -28,8 +31,18 @@ var listCmd = &cobra.Command{
 
 		filter := model.TaskFilter{}
 		if listStatus != "" {
+			if !model.IsValidStatus(listStatus) {
+				return fmt.Errorf("invalid status: %s", listStatus)
+			}
 			s := model.TaskStatus(listStatus)
 			filter.Status = &s
+		}
+		if listStage != "" {
+			if !model.IsValidStage(listStage) {
+				return fmt.Errorf("invalid stage: %s", listStage)
+			}
+			stage := model.TaskStage(listStage)
+			filter.Stage = &stage
 		}
 
 		tasks, err := svc.List(cmd.Context(), filter)
@@ -42,12 +55,13 @@ var listCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("%-12s %-10s %-10s %-20s %s\n", "ID", "STATUS", "PRIORITY", "CREATED", "TITLE")
-		fmt.Println(strings.Repeat("-", 80))
+		fmt.Printf("%-12s %-12s %-12s %-10s %-20s %s\n", "ID", "STATUS", "STAGE", "PRIORITY", "CREATED", "TITLE")
+		fmt.Println(strings.Repeat("-", 96))
 		for _, t := range tasks {
-			fmt.Printf("%-12s %-10s %-10s %-20s %s\n",
+			fmt.Printf("%-12s %-12s %-12s %-10s %-20s %s\n",
 				t.ID,
 				t.Status,
+				t.Stage,
 				t.Priority,
 				t.CreatedAt.Format("2006-01-02 15:04"),
 				truncate(t.Title, 30),
@@ -67,5 +81,6 @@ func truncate(s string, max int) string {
 
 func init() {
 	listCmd.Flags().StringVarP(&listStatus, "status", "s", "", "Filter by status (todo, in_progress, done, cancelled, archived)")
+	listCmd.Flags().StringVar(&listStage, "stage", "", "Filter by stage (inbox, mindstorm, analysis, planning, prd, tasks, dispatch, execution, review)")
 	rootCmd.AddCommand(listCmd)
 }

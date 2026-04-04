@@ -201,6 +201,9 @@ func matchesFilter(task *model.Task, filter *model.TaskFilter) bool {
 	if filter.Status != nil && task.Status != *filter.Status {
 		return false
 	}
+	if filter.Stage != nil && task.Stage != *filter.Stage {
+		return false
+	}
 	if filter.Priority != nil && task.Priority != *filter.Priority {
 		return false
 	}

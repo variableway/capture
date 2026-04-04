@@ -60,6 +60,8 @@ func (s *DualStore) GetTask(ctx context.Context, id string) (*model.Task, error)
 		task.Body = mdTask.Body
 		task.Description = mdTask.Description
 		task.Context = mdTask.Context
+		task.Stage = mdTask.Stage
+		task.Dispatch = mdTask.Dispatch
 		task.Execution = mdTask.Execution
 		task.Sync = mdTask.Sync
 	}

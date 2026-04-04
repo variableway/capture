@@ -5,11 +5,11 @@ import "time"
 type TaskStatus string
 
 const (
-	StatusTodo        TaskStatus = "todo"
-	StatusInProgress  TaskStatus = "in_progress"
-	StatusDone        TaskStatus = "done"
-	StatusCancelled   TaskStatus = "cancelled"
-	StatusArchived    TaskStatus = "archived"
+	StatusTodo       TaskStatus = "todo"
+	StatusInProgress TaskStatus = "in_progress"
+	StatusDone       TaskStatus = "done"
+	StatusCancelled  TaskStatus = "cancelled"
+	StatusArchived   TaskStatus = "archived"
 )
 
 func ValidStatuses() []TaskStatus {
@@ -19,6 +19,43 @@ func ValidStatuses() []TaskStatus {
 func IsValidStatus(s string) bool {
 	for _, v := range ValidStatuses() {
 		if TaskStatus(s) == v {
+			return true
+		}
+	}
+	return false
+}
+
+type TaskStage string
+
+const (
+	StageInbox     TaskStage = "inbox"
+	StageMindstorm TaskStage = "mindstorm"
+	StageAnalysis  TaskStage = "analysis"
+	StagePlanning  TaskStage = "planning"
+	StagePRD       TaskStage = "prd"
+	StageTasks     TaskStage = "tasks"
+	StageDispatch  TaskStage = "dispatch"
+	StageExecution TaskStage = "execution"
+	StageReview    TaskStage = "review"
+)
+
+func ValidStages() []TaskStage {
+	return []TaskStage{
+		StageInbox,
+		StageMindstorm,
+		StageAnalysis,
+		StagePlanning,
+		StagePRD,
+		StageTasks,
+		StageDispatch,
+		StageExecution,
+		StageReview,
+	}
+}
+
+func IsValidStage(s string) bool {
+	for _, v := range ValidStages() {
+		if TaskStage(s) == v {
 			return true
 		}
 	}
@@ -61,6 +98,15 @@ type TaskExecution struct {
 	CompletedAt *time.Time `yaml:"completed_at" json:"completed_at"`
 }
 
+type TaskDispatch struct {
+	Agent           string     `yaml:"agent" json:"agent"`
+	Model           string     `yaml:"model" json:"model"`
+	Repository      string     `yaml:"repository" json:"repository"`
+	Worktree        string     `yaml:"worktree" json:"worktree"`
+	TerminalSession string     `yaml:"terminal_session" json:"terminal_session"`
+	AssignedAt      *time.Time `yaml:"assigned_at" json:"assigned_at"`
+}
+
 type TaskSync struct {
 	FeishuRecordID string     `yaml:"feishu_record_id" json:"feishu_record_id"`
 	LastSyncedAt   *time.Time `yaml:"last_synced_at" json:"last_synced_at"`
@@ -71,12 +117,14 @@ type Task struct {
 	Title       string        `yaml:"title" json:"title"`
 	Description string        `yaml:"description" json:"description"`
 	Status      TaskStatus    `yaml:"status" json:"status"`
+	Stage       TaskStage     `yaml:"stage" json:"stage"`
 	Priority    TaskPriority  `yaml:"priority" json:"priority"`
 	Tags        []string      `yaml:"tags" json:"tags"`
 	CreatedAt   time.Time     `yaml:"created_at" json:"created_at"`
 	UpdatedAt   time.Time     `yaml:"updated_at" json:"updated_at"`
 	Source      string        `yaml:"source" json:"source"` // cli, tui, feishu_bot
 	Context     TaskContext   `yaml:"context" json:"context"`
+	Dispatch    TaskDispatch  `yaml:"dispatch" json:"dispatch"`
 	Execution   TaskExecution `yaml:"execution" json:"execution"`
 	Sync        TaskSync      `yaml:"sync" json:"sync"`
 	FilePath    string        `yaml:"-" json:"-"`
@@ -88,6 +136,7 @@ func NewTask(title string) *Task {
 	return &Task{
 		Title:     title,
 		Status:    StatusTodo,
+		Stage:     StageInbox,
 		Priority:  PriorityMedium,
 		Tags:      []string{},
 		CreatedAt: now,
@@ -120,6 +169,7 @@ func CanTransition(from, to TaskStatus) bool {
 
 type TaskFilter struct {
 	Status   *TaskStatus
+	Stage    *TaskStage
 	Priority *TaskPriority
 	Tags     []string
 	Source   *string
